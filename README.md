@@ -4,7 +4,7 @@ Transformer-based anomaly detection for smart contract execution traces.
 
 ## :zap: Quick Start
 
-### 1. Download the data
+### :envelope_with_arrow: 1. Download the data
 
 Download the dataset from [this link](https://drive.google.com/drive/folders/1qg6wA1EulpqzX_CYeJZv3ZmgWTkt5CCQ?usp=sharing) and place the contents in the `data/` directory.
 
