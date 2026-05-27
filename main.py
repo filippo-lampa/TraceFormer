@@ -629,7 +629,7 @@ def main(run_train=True, run_test=True):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Baseline test execution on mutants.')
+    parser = argparse.ArgumentParser(description='Execute anomaly detection on smart contract execution traces.')
     parser.add_argument('--train', action='store_true', help='Whether to run training.')
     parser.add_argument('--test', action='store_true', help='Whether to run testing.')
     args = parser.parse_args()
