@@ -95,19 +95,50 @@ def load_vocabs(path: str):
 
 # token/vocab helpers
 
+import json
+import pandas as pd
+
 def load_and_merge_logs(file_paths: list[str], verbose: bool = False) -> pd.DataFrame:
     dfs = []
     for path in file_paths:
         if verbose:
             print(f"Reading {path}...")
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        tmp = pd.DataFrame.from_records(data)
+            
+        try:
+            # 1. Try loading it as standard, single-object JSON
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            if isinstance(data, dict):
+                data = [data]
+                
+            tmp = pd.DataFrame.from_records(data)
+            
+        except json.JSONDecodeError as e:
+            if "Extra data" in str(e):
+                if verbose:
+                    print(f"  -> Multi-object JSON detected. Parsing safely line-by-line...")
+                
+                # 2. Fallback: Parse manually with standard json library to avoid Pandas/ujson limits
+                data = []
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():  # Ignore empty lines
+                            data.append(json.loads(line))
+                
+                # Turn the safely parsed list of dicts into a DataFrame
+                tmp = pd.DataFrame.from_records(data)
+            else:
+                raise e
+
+        # Clean up the ID column if it exists
         if "_id" in tmp.columns:
             tmp = tmp.drop(columns=["_id"])
+            
         dfs.append(tmp)
         if verbose:
             print(f" -> Loaded {len(tmp)} rows from {path}")
+            
     return pd.concat(dfs, ignore_index=True)
 
 
@@ -205,7 +236,6 @@ def get_or_build_vocabs_train_only(
     tree_train = flatten_token_seqs(subset(tree_token_seqs, train_idx))
     ctx_train = flatten_token_seqs(subset(ctx_token_seqs, train_idx))
 
-    print(len(out_train))
     out_vocab = build_vocab(out_train)
     tree_vocab = build_vocab(tree_train)
     ctx_vocab = build_vocab(ctx_train)
@@ -301,7 +331,15 @@ def train_main(
     EPOCHS = 10
 
     file_paths = [
-        "data/traceformer_train_val_test_log.json"
+        "data/LogNuovoPiccolo.json",
+        "data/LogNuovoGrande.json",
+        "data/0x06012c8cf97bead5deae237070f9587f8e7a266d.json",
+        "data/0x323a76393544d5ecca80cd6ef2a560c6a395b7e3_from 13942537 - to 23483870.json",
+        "data/0x35d1b3f3d7966a1dfe207aa4514c12a259a0492b_ from 8953736 - to 23228317.json",
+        "data/0xb1690c08e213a35ed9bab7b318de14420fb57d8c.json",
+        "data/0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc_from 10019997 to 10961610.json",
+        "data/0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d.json",
+        "data/0xff9c1b15b16263c61d017ee9f65c50e4ae0113d7_ from 13108887 - to 13124897.json",
     ]
 
     print("Loading datasets...")
@@ -420,7 +458,15 @@ def test_main(
     SCORE_KEY = "mean_token_nll"
 
     file_paths = [
-        "data/traceformer_train_val_test_log.json"
+        "data/0x5efda50f22d34f262c29268506c5fa42cb56a1ce.json",
+        "data/0x556b9306565093c855aea9ae92a594704c2cd59e.json",
+        "data/0x06012c8cf97bead5deae237070f9587f8e7a266d.json",
+        "data/0x323a76393544d5ecca80cd6ef2a560c6a395b7e3_from 13942537 - to 23483870.json",
+        "data/0x35d1b3f3d7966a1dfe207aa4514c12a259a0492b_ from 8953736 - to 23228317.json",
+        "data/0xb1690c08e213a35ed9bab7b318de14420fb57d8c.json",
+        "data/0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc_from 10019997 to 10961610.json",
+        "data/0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d.json",
+        "data/0xff9c1b15b16263c61d017ee9f65c50e4ae0113d7_ from 13108887 - to 13124897.json",
     ]
 
     # step 1: compute threshold based on 99th percentile of scores distribution (on test data). The threshold will be used to flag txs as normal or anomalous.
@@ -515,6 +561,8 @@ def test_main(
     
     all_attacks_df = pd.DataFrame()
     attack_dfs = []
+    attack_meta = []
+
     for path in attack_paths:
         with open(path, "r", encoding="utf-8") as f:
             attack_data = json.load(f)
@@ -527,6 +575,9 @@ def test_main(
             attack_df = attack_df.drop(columns=["_id"])
 
         attack_dfs.append(attack_df)
+
+        for local_i in range(len(attack_df)):
+                attack_meta.append((os.path.basename(path), local_i))
 
     if attack_dfs:
         all_attacks_df = pd.concat(attack_dfs, ignore_index=True)
@@ -613,6 +664,17 @@ def test_main(
     print("\nMissed attacks (FN), lowest score first:")
     for idx, sc, fn_file, fn_local in missed[:50]:
         print(f"  global_attack_idx={idx}  score={sc:.6f}  file={fn_file}  local_tx={fn_local}")
+
+
+    top_attacks = sorted(
+        [(i, s[SCORE_KEY], attack_meta[i][0], attack_meta[i][1]) for i, s in enumerate(attack_scores)],
+        key=lambda x: x[1],
+        reverse=True,
+    )[:10]
+
+    print("\nTop-10 attacks by score:")
+    for i, sc, fn_file, fn_local in top_attacks:
+        print(f"  global_attack_idx={i}  score={sc:.6f}  file={fn_file}  local_tx={fn_local}")
 
 
 def main(run_train=True, run_test=True):
