@@ -105,7 +105,7 @@ def load_and_merge_logs(file_paths: list[str], verbose: bool = False) -> pd.Data
             print(f"Reading {path}...")
             
         try:
-            # 1. Try loading it as standard, single-object JSON
+            # try loading as standard single-object JSON
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
@@ -119,19 +119,17 @@ def load_and_merge_logs(file_paths: list[str], verbose: bool = False) -> pd.Data
                 if verbose:
                     print(f"  -> Multi-object JSON detected. Parsing safely line-by-line...")
                 
-                # 2. Fallback: Parse manually with standard json library to avoid Pandas/ujson limits
+                # fallback, parse manually with standard json library to avoid Pandas limits on addresses or large integers
                 data = []
                 with open(path, "r", encoding="utf-8") as f:
                     for line in f:
-                        if line.strip():  # Ignore empty lines
+                        if line.strip(): 
                             data.append(json.loads(line))
                 
-                # Turn the safely parsed list of dicts into a DataFrame
                 tmp = pd.DataFrame.from_records(data)
             else:
                 raise e
 
-        # Clean up the ID column if it exists
         if "_id" in tmp.columns:
             tmp = tmp.drop(columns=["_id"])
             
@@ -331,8 +329,8 @@ def train_main(
     EPOCHS = 10
 
     file_paths = [
-        "data/LogNuovoPiccolo.json",
-        "data/LogNuovoGrande.json",
+        "data/0x5efda50f22d34f262c29268506c5fa42cb56a1ce.json",
+        "data/0x556b9306565093c855aea9ae92a594704c2cd59e.json",
         "data/0x06012c8cf97bead5deae237070f9587f8e7a266d.json",
         "data/0x323a76393544d5ecca80cd6ef2a560c6a395b7e3_from 13942537 - to 23483870.json",
         "data/0x35d1b3f3d7966a1dfe207aa4514c12a259a0492b_ from 8953736 - to 23228317.json",
