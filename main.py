@@ -546,27 +546,6 @@ def test_main(
     normal_tree_seqs = encode_token_seqs(normal_tree_token_seqs, tree_vocab)
     normal_ctx_seqs = encode_token_seqs(normal_ctx_token_seqs, ctx_vocab)
 
-    # normal_test_out = subset(normal_out_seqs, test_idx)
-    # normal_test_tree = subset(normal_tree_seqs, test_idx)
-    # normal_test_ctx = subset(normal_ctx_seqs, test_idx)
-
-    # print("Computing test score distribution...")
-    # test_scores = score_transactions(
-    #     model=model,
-    #     loss_function_none=score_loss_fn,
-    #     out_seqs=normal_test_out,
-    #     tree_seqs=normal_test_tree,
-    #     ctx_seqs=normal_test_ctx,
-    #     block_size=BLOCK_SIZE,
-    #     device=DEVICE,
-    # )
-    # if not test_scores:
-    #     raise ValueError("No test scores computed.")
-
-    # test_tx_scores = [s[SCORE_KEY] for s in test_scores]
-    # thr = torch.quantile(torch.tensor(test_tx_scores, dtype=torch.float64), 0.99).item()
-    # print(f"Threshold (99th percentile test {SCORE_KEY}): {thr:.6f}")
-
     normal_val_out = subset(normal_out_seqs, val_idx)
     normal_val_tree = subset(normal_tree_seqs, val_idx)
     normal_val_ctx = subset(normal_ctx_seqs, val_idx)
