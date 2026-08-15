@@ -311,6 +311,36 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         
     return df
 
+def load_json_or_jsonl(path):
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    try:
+        data = json.loads(content)
+
+        if isinstance(data, dict):
+            return [data]
+
+        return data
+
+    except json.JSONDecodeError as normal_json_error:
+        records = []
+
+        try:
+            for line_number, line in enumerate(content.splitlines(), start=1):
+                if not line.strip():
+                    continue
+
+                records.append(json.loads(line))
+
+            return records
+
+        except json.JSONDecodeError as jsonl_error:
+            raise ValueError(
+                f"Could not parse {path} as either JSON or JSONL.\n"
+                f"Normal JSON error: {normal_json_error}\n"
+                f"JSONL error on line {line_number}: {jsonl_error}"
+            ) from jsonl_error
 
 # train
 
@@ -516,26 +546,45 @@ def test_main(
     normal_tree_seqs = encode_token_seqs(normal_tree_token_seqs, tree_vocab)
     normal_ctx_seqs = encode_token_seqs(normal_ctx_token_seqs, ctx_vocab)
 
-    normal_test_out = subset(normal_out_seqs, test_idx)
-    normal_test_tree = subset(normal_tree_seqs, test_idx)
-    normal_test_ctx = subset(normal_ctx_seqs, test_idx)
+    # normal_test_out = subset(normal_out_seqs, test_idx)
+    # normal_test_tree = subset(normal_tree_seqs, test_idx)
+    # normal_test_ctx = subset(normal_ctx_seqs, test_idx)
 
-    print("Computing test score distribution...")
-    test_scores = score_transactions(
+    # print("Computing test score distribution...")
+    # test_scores = score_transactions(
+    #     model=model,
+    #     loss_function_none=score_loss_fn,
+    #     out_seqs=normal_test_out,
+    #     tree_seqs=normal_test_tree,
+    #     ctx_seqs=normal_test_ctx,
+    #     block_size=BLOCK_SIZE,
+    #     device=DEVICE,
+    # )
+    # if not test_scores:
+    #     raise ValueError("No test scores computed.")
+
+    # test_tx_scores = [s[SCORE_KEY] for s in test_scores]
+    # thr = torch.quantile(torch.tensor(test_tx_scores, dtype=torch.float64), 0.99).item()
+    # print(f"Threshold (99th percentile test {SCORE_KEY}): {thr:.6f}")
+
+    normal_val_out = subset(normal_out_seqs, val_idx)
+    normal_val_tree = subset(normal_tree_seqs, val_idx)
+    normal_val_ctx = subset(normal_ctx_seqs, val_idx)
+
+    val_scores = score_transactions(
         model=model,
         loss_function_none=score_loss_fn,
-        out_seqs=normal_test_out,
-        tree_seqs=normal_test_tree,
-        ctx_seqs=normal_test_ctx,
+        out_seqs=normal_val_out,
+        tree_seqs=normal_val_tree,
+        ctx_seqs=normal_val_ctx,
         block_size=BLOCK_SIZE,
         device=DEVICE,
     )
-    if not test_scores:
-        raise ValueError("No test scores computed.")
 
-    test_tx_scores = [s[SCORE_KEY] for s in test_scores]
-    thr = torch.quantile(torch.tensor(test_tx_scores, dtype=torch.float64), 0.99).item()
-    print(f"Threshold (99th percentile test {SCORE_KEY}): {thr:.6f}")
+    val_tx_scores = [s[SCORE_KEY] for s in val_scores]
+    thr = torch.quantile(
+        torch.tensor(val_tx_scores, dtype=torch.float64), 0.99
+    ).item()
 
     # step 2: evaluate the model
     ATTACK_DIR = "data/AttacksLogs"
@@ -562,27 +611,35 @@ def test_main(
     attack_meta = []
 
     for path in attack_paths:
-        with open(path, "r", encoding="utf-8") as f:
-            attack_data = json.load(f)
-        if isinstance(attack_data, dict):
-            attack_data = [attack_data]
-            
+        print(path)
+
+        attack_data = load_json_or_jsonl(path)
+
         attack_df = pd.DataFrame.from_records(attack_data)
-        
+
         if "_id" in attack_df.columns:
             attack_df = attack_df.drop(columns=["_id"])
 
         attack_dfs.append(attack_df)
 
         for local_i in range(len(attack_df)):
-                attack_meta.append((os.path.basename(path), local_i))
+            attack_meta.append((os.path.basename(path), local_i))
+
+        print(f"  -> Loaded {len(attack_df)} transactions")
+
 
     if attack_dfs:
         all_attacks_df = pd.concat(attack_dfs, ignore_index=True)
-    
+
+    # Apply same preprocessing used for normal transactions
+    all_attacks_df = clean_dataframe(all_attacks_df)
+
+    print(f"Total attack transactions loaded: {len(all_attacks_df)}")
+
+
     attack_out_s, attack_tree_s, attack_ctx_s = get_or_build_token_seqs(
         df=all_attacks_df,
-        file_paths=file_paths,
+        file_paths=attack_paths,
         cache_path="cache/tokenized_attacks_seqs.pkl",
     )
 

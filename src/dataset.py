@@ -32,7 +32,6 @@ class TxRandomWindowDataset(Dataset):
         current_len = len(out)
 
         if current_len < required_len:
-            # padding
             pad_size = required_len - current_len
             out = torch.cat([out, torch.full((pad_size,), self.pad_id, dtype=torch.long)])
             tree = torch.cat([tree, torch.full((pad_size,), self.pad_id, dtype=torch.long)])
@@ -48,34 +47,67 @@ class TxRandomWindowDataset(Dataset):
 
         return x_out, x_tree, x_ctx, y
 
+
 class TxStrideWindowDataset(Dataset):
-    def __init__(self, out_seqs, tree_seqs, ctx_seqs, block_size: int, stride: int = None):
+    def __init__(
+        self,
+        out_seqs,
+        tree_seqs,
+        ctx_seqs,
+        block_size: int,
+        stride: int = None,
+        pad_id: int = 0,
+    ):
         assert len(out_seqs) == len(tree_seqs) == len(ctx_seqs)
+
         self.out_seqs = out_seqs
         self.tree_seqs = tree_seqs
         self.ctx_seqs = ctx_seqs
         self.T = block_size
         self.stride = stride if stride is not None else block_size
+        self.pad_id = pad_id
 
         self.samples = []
+
         for j, out in enumerate(out_seqs):
-            if len(out) <= self.T + 1:
+            L = len(out)
+
+            if L < 2:
                 continue
-            for start in range(0, len(out) - self.T - 1, self.stride):
-                self.samples.append((j, start))
+
+            # include complete windows and the final partial window
+            for start in range(0, L - 1, self.stride):
+                valid_len = min(self.T, L - 1 - start)
+                self.samples.append((j, start, valid_len))
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, i):
-        j, start = self.samples[i]
+        j, start, valid_len = self.samples[i]
+
         out = self.out_seqs[j]
         tree = self.tree_seqs[j]
         ctx = self.ctx_seqs[j]
 
-        x_out  = out[start:start+self.T]
-        x_tree = tree[start:start+self.T]
-        x_ctx  = ctx[start:start+self.T]
-        y      = out[start+1:start+1+self.T]
-        return x_out, x_tree, x_ctx, y
+        x_out = out[start:start + valid_len]
+        x_tree = tree[start:start + valid_len]
+        x_ctx = ctx[start:start + valid_len]
+        y = out[start + 1:start + 1 + valid_len]
+
+        pad_len = self.T - valid_len
+
+        if pad_len > 0:
+            pad = torch.full(
+                (pad_len,),
+                self.pad_id,
+                dtype=torch.long
+            )
+
+            x_out = torch.cat([x_out, pad])
+            x_tree = torch.cat([x_tree, pad])
+            x_ctx = torch.cat([x_ctx, pad])
+            y = torch.cat([y, pad])
+
+        return x_out, x_tree, x_ctx, y, valid_len
 
