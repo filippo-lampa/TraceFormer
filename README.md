@@ -6,7 +6,7 @@ Transformer-based anomaly detection for smart contract execution traces.
 
 ### :envelope_with_arrow: 1. Download the data
 
-Download the dataset from [this link](https://drive.google.com/drive/folders/1qg6wA1EulpqzX_CYeJZv3ZmgWTkt5CCQ?usp=sharing) and place the contents in the `data/` directory.
+Download the dataset from [this link](https://osf.io/gc4pf/overview?view_only=4e1ee999314e4803b4c2c34ac19eeb1e) and place the contents in the `data/` directory.
 
 ### :package: 2. Install dependencies
 
